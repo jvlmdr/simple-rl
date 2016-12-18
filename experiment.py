@@ -8,29 +8,31 @@ import policygrad
 import cartpole
 
 def main():
-    num_trials = 10
+    num_trials = 8
     num_iters = 100
     episodes_per_batch = [10, 30, 100]
+    learning_rate = [1e-5, 1e-3, 1e-1]
     out_dir = 'out'
 
     env = gym.make('CartPole-v0')
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
-    hists = [[None for i in range(num_trials)]
-                   for j in range(len(episodes_per_batch))]
-    for j in range(len(episodes_per_batch)):
-        name = 'episodes-%d' % episodes_per_batch[j]
-        trial_names = []
-        for i in range(num_trials):
-            trial_name = '%s-trial-%d' % (name, i)
-            hists[j][i] = policygrad.train(env, cartpole.create_policy,
-                state_dim=4, action_dim=2,
-                num_iters=num_iters,
-                num_episodes=episodes_per_batch[j])
-            write_data(os.path.join(out_dir, trial_name+'.tsv'), hists[j][i])
-            trial_names.append(trial_name)
-        plot(out_dir, name, trial_names)
+    for k in range(len(learning_rate)):
+        for j in range(len(episodes_per_batch)):
+            name = 'episodes-%d-lr-%g' % (episodes_per_batch[j], learning_rate[k])
+            trial_names = []
+            for i in range(num_trials):
+                trial_name = '%s-trial-%d' % (name, i)
+                hist = policygrad.train(env, cartpole.create_policy,
+                    state_dim=4, action_dim=2,
+                    num_iters=num_iters,
+                    num_episodes=episodes_per_batch[j],
+                    lr=learning_rate[k])
+                write_data(os.path.join(out_dir, trial_name+'.tsv'), hist)
+                trial_names.append(trial_name)
+            # Plot all trials together.
+            plot(out_dir, name, trial_names)
 
 def write_data(fname, hist):
     with open(fname, 'wb') as f:
