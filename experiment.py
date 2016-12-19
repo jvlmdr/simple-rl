@@ -11,8 +11,9 @@ def main():
     num_trials = 8
     num_iters = 100
     episodes_per_batch = [10, 30, 100]
-    learning_rate = [1e-5, 1e-3, 1e-1]
+    learning_rate = [1e-8]
     out_dir = 'out'
+    use_advantage = True
 
     env = gym.make('CartPole-v0')
 
@@ -24,11 +25,13 @@ def main():
             trial_names = []
             for i in range(num_trials):
                 trial_name = '%s-trial-%d' % (name, i)
-                hist = policygrad.train(env, cartpole.create_policy,
+                create_policy = lambda x: cartpole.create_policy(x, use_value=use_advantage)
+                hist = policygrad.train(env, create_policy,
                     state_dim=4, action_dim=2,
                     num_iters=num_iters,
                     num_episodes=episodes_per_batch[j],
-                    lr=learning_rate[k])
+                    lr=learning_rate[k],
+                    use_advantage=use_advantage)
                 write_data(os.path.join(out_dir, trial_name+'.tsv'), hist)
                 trial_names.append(trial_name)
             # Plot all trials together.
