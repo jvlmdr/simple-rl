@@ -8,34 +8,39 @@ import policygrad
 import cartpole
 
 def main():
-    num_trials = 8
-    num_iters = 100
-    episodes_per_batch = [10, 30, 100]
-    learning_rate = [1e-8]
-    out_dir = 'out'
+    num_trials    = 8
+    num_iters     = 100
+    out_dir       = 'out'
     use_advantage = True
+
+    num_episodes  = [10, 30]
+    learning_rate = [1e-9, 1e-7, 1e-5]
+    discounts     = [0.9, 0.99, 1.0]
 
     env = gym.make('CartPole-v0')
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
-    for k in range(len(learning_rate)):
-        for j in range(len(episodes_per_batch)):
-            name = 'episodes-%d-lr-%g' % (episodes_per_batch[j], learning_rate[k])
-            trial_names = []
-            for i in range(num_trials):
-                trial_name = '%s-trial-%d' % (name, i)
-                create_policy = lambda x: cartpole.create_policy(x, use_value=use_advantage)
-                hist = policygrad.train(env, create_policy,
-                    state_dim=4, action_dim=2,
-                    num_iters=num_iters,
-                    num_episodes=episodes_per_batch[j],
-                    lr=learning_rate[k],
-                    use_advantage=use_advantage)
-                write_data(os.path.join(out_dir, trial_name+'.tsv'), hist)
-                trial_names.append(trial_name)
-            # Plot all trials together.
-            plot(out_dir, name, trial_names)
+    for i in range(len(num_episodes)):
+        for k in range(len(discounts)):
+            for j in range(len(learning_rate)):
+                name = 'episodes-%d-lr-%g-discount-%g' % (
+                    num_episodes[i], learning_rate[j], discounts[k])
+                trial_names = []
+                for trial in range(num_trials):
+                    trial_name = '%s-trial-%d' % (name, trial)
+                    create_policy = lambda x: cartpole.create_policy(x, use_value=use_advantage)
+                    hist = policygrad.train(env, create_policy,
+                        state_dim=4, action_dim=2,
+                        num_iters=num_iters,
+                        num_episodes=num_episodes[i],
+                        lr=learning_rate[j],
+                        discount=discounts[k],
+                        use_advantage=use_advantage)
+                    write_data(os.path.join(out_dir, trial_name+'.tsv'), hist)
+                    trial_names.append(trial_name)
+                # Plot all trials together.
+                plot(out_dir, name, trial_names)
 
 def write_data(fname, hist):
     with open(fname, 'wb') as f:

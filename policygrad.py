@@ -2,7 +2,7 @@ import numpy as np
 import gym
 import tensorflow as tf
 
-def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episodes=16, lr=1e-3, max_time_steps=1000, use_advantage=False, coeff_value=1.0):
+def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episodes=16, lr=1e-3, discount=1.0, max_time_steps=1000, use_advantage=False, coeff_value=1.0):
     '''
     Parameters:
     create_policy -- Function that maps state to (logits_op, theta).
@@ -58,7 +58,7 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             # Divide by number of episodes.
             weight = [[1.0/len(ep['state'])*n for t in ep['state']] for ep in episodes]
             total_rewards = [sum(ep['reward']) for ep in episodes]
-            future_rewards = [np.cumsum(ep['reward'][::-1])[::-1] for ep in episodes]
+            future_rewards = [compute_future_rewards(ep['reward'], discount) for ep in episodes]
             sess.run([train_op], feed_dict={
                 state_var:         np.array(concat([ep['state'] for ep in episodes])),
                 action_var:        np.array(concat([ep['action'] for ep in episodes])),
@@ -70,6 +70,15 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             print '%d  reward:%10.3e' % (it, np.mean(total_rewards))
 
     return history
+
+def compute_future_rewards(r, gamma):
+    n = len(r)
+    s = 0
+    ss = []
+    for k in range(n):
+        s = r[n-1-k] + gamma*s
+        ss.append(s)
+    return ss[::-1]
 
 def concat(x):
     return [e for l in x for e in l]
