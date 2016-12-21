@@ -33,9 +33,9 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
         else:
             loss_op = reward_loss(logits_op, action_var, future_reward_var, sample_weight_var)
 
-        init_op = tf.global_variables_initializer()
-        opt = tf.train.GradientDescentOptimizer(lr)
+        opt = tf.train.MomentumOptimizer(lr, 0.9)
         train_op = opt.minimize(loss_op)
+        init_op = tf.global_variables_initializer()
 
         sess = tf.Session()
         sess.run(init_op)

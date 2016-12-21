@@ -3,7 +3,7 @@ import tensorflow as tf
 STATE_DIM = 4
 ACTION_DIM = 2
 
-def create_policy(x, use_value=False, h1_dim=10, h2_dim=10, h_stddev=1, action_stddev=1, value_stddev=1):
+def create_policy(x, use_value=False, h1_dim=10, h2_dim=10, h_stddev=1, action_stddev=0, value_stddev=1):
     with tf.name_scope('h1'):
         w1 = tf.Variable(tf.truncated_normal([STATE_DIM, h1_dim], stddev=h_stddev),
                          name='weight')
