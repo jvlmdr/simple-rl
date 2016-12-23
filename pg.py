@@ -10,6 +10,7 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
 
     history = {}
     history['reward'] = []
+    history['gradient'] = []
     history['num_episodes'] = []
     total_num_episodes = 0
 
@@ -26,6 +27,9 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
         future_reward_var = tf.placeholder(tf.float32, shape=(None,), name='future_reward')
         sample_weight_var = tf.placeholder(tf.float32, shape=(None,), name='sample_weight')
 
+        # Pre-train value function.
+        # train_value(value_op, theta)
+
         if use_advantage:
             reward_loss_op = advantage_loss(logits_op, value_op, action_var, future_reward_var, sample_weight_var)
             value_loss_op = 0.5*tf.reduce_sum(tf.mul(sample_weight_var, tf.square(value_op - future_reward_var)))
@@ -36,6 +40,7 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
         opt = tf.train.MomentumOptimizer(lr, 0.9)
         train_op = opt.minimize(loss_op)
         init_op = tf.global_variables_initializer()
+        grad_op = tf.gradients(loss_op, theta)
 
         sess = tf.Session()
         sess.run(init_op)
@@ -59,7 +64,7 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             weight = [[1.0/len(ep['state'])*n for t in ep['state']] for ep in episodes]
             total_rewards = [sum(ep['reward']) for ep in episodes]
             future_rewards = [compute_future_rewards(ep['reward'], discount) for ep in episodes]
-            sess.run([train_op], feed_dict={
+            grads, _ = sess.run([grad_op, train_op], feed_dict={
                 state_var:         np.array(concat([ep['state'] for ep in episodes])),
                 action_var:        np.array(concat([ep['action'] for ep in episodes])),
                 future_reward_var: np.array(concat(future_rewards)),
@@ -67,6 +72,7 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             })
             history['reward'].append(np.mean(total_rewards))
             history['num_episodes'].append(total_num_episodes)
+            history['gradient'].append([np.max(np.abs(g)) for g in grads])
             print '%d  reward:%10.3e' % (it, np.mean(total_rewards))
 
     return history
