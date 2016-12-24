@@ -2,7 +2,7 @@ import numpy as np
 import gym
 import tensorflow as tf
 
-def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episodes=16, lr=1e-3, discount=1.0, max_time_steps=1000, use_advantage=False, coeff_value=1.0):
+def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episodes=16, lr=1e-3, discount=1.0, max_time_steps=1000, use_advantage=False, coeff_value=1.0, weight_decay=0.0):
     '''
     Parameters:
     create_policy -- Function that maps state to (logits_op, theta).
@@ -27,15 +27,15 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
         future_reward_var = tf.placeholder(tf.float32, shape=(None,), name='future_reward')
         sample_weight_var = tf.placeholder(tf.float32, shape=(None,), name='sample_weight')
 
-        # Pre-train value function.
-        # train_value(value_op, theta)
-
         if use_advantage:
             reward_loss_op = advantage_loss(logits_op, value_op, action_var, future_reward_var, sample_weight_var)
             value_loss_op = 0.5*tf.reduce_sum(tf.mul(sample_weight_var, tf.square(value_op - future_reward_var)))
             loss_op = reward_loss_op + coeff_value*value_loss_op
         else:
             loss_op = reward_loss(logits_op, action_var, future_reward_var, sample_weight_var)
+
+        # Add weight decay.
+        loss_op += weight_decay * tf.reduce_sum([tf.nn.l2_loss(x) for x in theta])
 
         opt = tf.train.MomentumOptimizer(lr, 0.9)
         train_op = opt.minimize(loss_op)

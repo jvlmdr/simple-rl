@@ -31,7 +31,8 @@ def main():
             lr=learning_rate,
             discount=discounts,
             use_advantage=use_advantage,
-            max_time_steps=1000)
+            max_time_steps=1000,
+            weight_decay=1e0)
         write_data(os.path.join(out_dir, trial_name+'.tsv'), hist)
         trial_names.append(trial_name)
     # Plot all trials together.
