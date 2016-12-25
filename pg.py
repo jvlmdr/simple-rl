@@ -8,10 +8,15 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
     create_policy -- Function that maps state to (logits_op, theta).
     '''
 
-    history = {}
-    history['reward'] = []
-    history['gradient'] = []
-    history['num_episodes'] = []
+    h = {
+        'num_episodes': [],
+        'reward':       [],
+        # Record max-norm of gradients.
+        'gradient': [],
+        # Record future reward and value estimate.
+        'mean_future_reward': [],
+        'mean_value':         [],
+    }
     total_num_episodes = 0
 
     g = tf.Graph()
@@ -47,15 +52,15 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
 
         def probs_fn(s):
             feed_dict = {state_var: np.reshape(s, (1, state_dim))} # Create batch.
-            _, p = sess.run([logits_op, probs_op], feed_dict=feed_dict)
-            return p[0]# Unpack from batch.
+            _, p, v = sess.run([logits_op, probs_op, value_op], feed_dict=feed_dict)
+            return p[0], v[0] # Unpack from batch.
 
         for it in xrange(num_iters):
             # Construct a batch of inputs.
             episodes = []
-            for ep in xrange(num_episodes):
-                s, a, r = run_episode(env, probs_fn, max_time_steps=max_time_steps)
-                episodes.append({'state': s, 'action': a, 'reward': r})
+            for i in xrange(num_episodes):
+                ep = run_episode(env, probs_fn, max_time_steps=max_time_steps)
+                episodes.append(ep)
                 total_num_episodes += 1
 
             n = sum([len(ep['state']) for ep in episodes])
@@ -70,12 +75,14 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
                 future_reward_var: np.array(concat(future_rewards)),
                 sample_weight_var: np.array(concat(weight)),
             })
-            history['reward'].append(np.mean(total_rewards))
-            history['num_episodes'].append(total_num_episodes)
-            history['gradient'].append([np.max(np.abs(g)) for g in grads])
+            h['reward'].append(np.mean(total_rewards))
+            h['num_episodes'].append(total_num_episodes)
+            h['gradient'].append([np.max(np.abs(g)) for g in grads])
+            h['mean_future_reward'].append(np.mean([np.mean(r) for r in future_rewards]))
+            h['mean_value'].append(np.mean([np.mean(ep['value']) for ep in episodes]))
             print '%d  reward:%10.3e' % (it, np.mean(total_rewards))
 
-    return history
+    return h
 
 def compute_future_rewards(r, gamma):
     n = len(r)
@@ -90,22 +97,29 @@ def concat(x):
     return [e for l in x for e in l]
 
 def run_episode(env, policy, render=False, max_time_steps=1000):
-    s, a, r = [], [], []
+    ep = {
+        'state':  [],
+        'action': [],
+        'reward': [],
+        'value':  [],
+    }
     s_t = env.reset()
     for t in xrange(max_time_steps):
-        s.append(s_t)
+        ep['state'].append(s_t)
         # Evaluate the neural network.
-        probs = policy(s_t)
+        probs, v_t = policy(s_t)
+        ep['value'].append(v_t)
         # Sample the action.
         a_t = np.random.choice(len(probs), p=probs)
-        a.append(a_t)
+        ep['action'].append(a_t)
         s_t, r_t, done, info = env.step(a_t)
-        r.append(r_t)
+        ep['reward'].append(r_t)
+        print 'value:%10.3e probs: %s' % (v_t, ' '.join('%.3f' % p for p in probs))
         if render:
             env.render()
         if done:
             break
-    return s, a, r
+    return ep
 
 def reward_loss(logits, actions, future_rewards, weights):
     actions = tf.to_int32(actions)

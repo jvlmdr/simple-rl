@@ -13,7 +13,7 @@ def main():
     out_dir       = 'out'
     use_advantage = True
     num_episodes  = 30
-    learning_rate = 1e-8
+    learning_rate = 1e-9
     discounts     = 0.9
 
     env = gym.make('CartPole-v0')
@@ -32,18 +32,21 @@ def main():
             discount=discounts,
             use_advantage=use_advantage,
             max_time_steps=1000,
+            coeff_value=1e-6,
             weight_decay=1e0)
         write_data(os.path.join(out_dir, trial_name+'.tsv'), hist)
+        plot_detail(out_dir, trial_name)
+        plot_grad(out_dir, trial_name, range(6))
         trial_names.append(trial_name)
     # Plot all trials together.
     plot(out_dir, 'pg', trial_names)
-    plot_each(out_dir, trial_names, range(6))
 
 def write_data(fname, hist):
     with open(fname, 'wb') as f:
         w = csv.writer(f, delimiter='\t')
         for t in range(len(hist['reward'])):
-            row = [hist['num_episodes'][t], hist['reward'][t]] + hist['gradient'][t]
+            cols = ['num_episodes', 'reward', 'mean_future_reward', 'mean_value']
+            row = [hist[k][t] for k in cols] + hist['gradient'][t]
             w.writerow(row)
 
 def plot(out_dir, name, trial_names):
@@ -60,24 +63,40 @@ plot {% for trial in trials %}'{{ trial }}.tsv' using 1:2 title '{{ trial }}' wi
     p = subprocess.Popen(['gnuplot', script_file], cwd=out_dir)
     p.wait()
 
-def plot_each(out_dir, trial_names, param_inds):
+def plot_detail(out_dir, trial_name):
     template = jinja2.Template('''
 set terminal png
-set output '{{ name }}.png'
+set output '{{ name }}-detail.png'
+set y2tics
+set format y2 '%.1g'
+plot '{{ name }}.tsv' using 1:2 title 'reward' with lines axes x1y1, \\
+'' using 1:3 title 'future reward' with lines axes x1y1, \\
+'' using 1:4 title 'value estimate' with lines axes x1y2 lt 0 lc 3
+''')
+    s = template.render(name=trial_name)
+    script_file = trial_name+'-detail.gnuplot'
+    with open(os.path.join(out_dir, script_file), 'wb') as f:
+        f.write(s)
+    p = subprocess.Popen(['gnuplot', script_file], cwd=out_dir)
+    p.wait()
+
+def plot_grad(out_dir, trial_name, param_inds):
+    template = jinja2.Template('''
+set terminal png
+set output '{{ name }}-grad.png'
 set y2tics
 set logscale y2
 set format y2 '%.1g'
 plot '{{ name }}.tsv' using 1:2 title 'reward' with lines axes x1y1, \\
-{% for param in params %}'' using 1:{{ 3+param }} title 'grad {{ param }}' with lines lt 0 lc {{ 2+loop.index }} axes x1y2{% if not loop.last %}, \\
+{% for param in params %}'' using 1:{{ 5+param }} title 'grad {{ param }}' with lines lt 0 lc {{ 4+loop.index }} axes x1y2{% if not loop.last %}, \\
 {% endif %}{% endfor %}
 ''')
-    for trial in trial_names:
-        s = template.render(name=trial, params=param_inds)
-        script_file = trial+'.gnuplot'
-        with open(os.path.join(out_dir, script_file), 'wb') as f:
-            f.write(s)
-        p = subprocess.Popen(['gnuplot', script_file], cwd=out_dir)
-        p.wait()
+    s = template.render(name=trial_name, params=param_inds)
+    script_file = trial_name+'-grad.gnuplot'
+    with open(os.path.join(out_dir, script_file), 'wb') as f:
+        f.write(s)
+    p = subprocess.Popen(['gnuplot', script_file], cwd=out_dir)
+    p.wait()
 
 if __name__ == '__main__':
     main()
