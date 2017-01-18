@@ -13,8 +13,8 @@ def main():
     out_dir       = 'out'
     use_advantage = True
     num_episodes  = 30
-    learning_rate = 1e-9
-    discounts     = 0.9
+    learning_rate = 1e-6
+    discount      = 0.9
 
     env = gym.make('CartPole-v0')
 
@@ -29,11 +29,11 @@ def main():
             num_iters=num_iters,
             num_episodes=num_episodes,
             lr=learning_rate,
-            discount=discounts,
+            discount=discount,
             use_advantage=use_advantage,
             max_time_steps=1000,
-            coeff_value=1e-6,
-            weight_decay=1e0)
+            coeff_value=1e0,
+            weight_decay=1e-5)
         write_data(os.path.join(out_dir, trial_name+'.tsv'), hist)
         plot_detail(out_dir, trial_name)
         plot_grad(out_dir, trial_name, range(6))
@@ -67,11 +67,9 @@ def plot_detail(out_dir, trial_name):
     template = jinja2.Template('''
 set terminal png
 set output '{{ name }}-detail.png'
-set y2tics
-set format y2 '%.1g'
 plot '{{ name }}.tsv' using 1:2 title 'reward' with lines axes x1y1, \\
 '' using 1:3 title 'future reward' with lines axes x1y1, \\
-'' using 1:4 title 'value estimate' with lines axes x1y2 lt 0 lc 3
+'' using 1:4 title 'value estimate' with lines axes x1y1
 ''')
     s = template.render(name=trial_name)
     script_file = trial_name+'-detail.gnuplot'

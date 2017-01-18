@@ -34,7 +34,7 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
 
         if use_advantage:
             reward_loss_op = advantage_loss(logits_op, value_op, action_var, future_reward_var, sample_weight_var)
-            value_loss_op = 0.5*tf.reduce_sum(tf.mul(sample_weight_var, tf.square(value_op - future_reward_var)))
+            value_loss_op = 0.5*tf.reduce_mean(tf.square(value_op - future_reward_var))
             loss_op = reward_loss_op + coeff_value*value_loss_op
         else:
             loss_op = reward_loss(logits_op, action_var, future_reward_var, sample_weight_var)
@@ -66,10 +66,10 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             n = sum([len(ep['state']) for ep in episodes])
             # Undo average in mini-batch.
             # Divide by number of episodes.
-            weight = [[1.0/len(ep['state'])*n for t in ep['state']] for ep in episodes]
+            weight = [[1.0/len(ep['state']) for t in ep['state']] for ep in episodes]
             total_rewards = [sum(ep['reward']) for ep in episodes]
             future_rewards = [compute_future_rewards(ep['reward'], discount) for ep in episodes]
-            grads, _ = sess.run([grad_op, train_op], feed_dict={
+            values, grads, _ = sess.run([value_op, grad_op, train_op], feed_dict={
                 state_var:         np.array(concat([ep['state'] for ep in episodes])),
                 action_var:        np.array(concat([ep['action'] for ep in episodes])),
                 future_reward_var: np.array(concat(future_rewards)),
@@ -77,7 +77,9 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             })
             h['reward'].append(np.mean(total_rewards))
             h['num_episodes'].append(total_num_episodes)
-            h['gradient'].append([np.max(np.abs(g)) for g in grads])
+            grad_norms = [np.max(np.abs(g)) for g in grads]
+            # print 'grads:', ' '.join('%.2e' % x for x in grad_norms)
+            h['gradient'].append(grad_norms)
             h['mean_future_reward'].append(np.mean([np.mean(r) for r in future_rewards]))
             h['mean_value'].append(np.mean([np.mean(ep['value']) for ep in episodes]))
             print '%d  reward:%10.3e' % (it, np.mean(total_rewards))
@@ -114,7 +116,7 @@ def run_episode(env, policy, render=False, max_time_steps=1000):
         ep['action'].append(a_t)
         s_t, r_t, done, info = env.step(a_t)
         ep['reward'].append(r_t)
-        print 'value:%10.3e probs: %s' % (v_t, ' '.join('%.3f' % p for p in probs))
+        # print 'value:%10.3e probs: %s' % (v_t, ' '.join('%.3f' % p for p in probs))
         if render:
             env.render()
         if done:
