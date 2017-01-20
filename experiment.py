@@ -9,12 +9,12 @@ import cartpole
 
 def main():
     num_trials    = 8
-    num_iters     = 100
+    num_iters     = 200
     out_dir       = 'out'
     use_advantage = True
     num_episodes  = 30
-    learning_rate = 1e-6
-    discount      = 0.9
+    learning_rate = 1e-7
+    discount      = 1.0
 
     env = gym.make('CartPole-v0')
 

@@ -30,14 +30,14 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
         action_var = tf.placeholder(tf.int32, shape=(None,), name='action')
         # total_reward_var = tf.placeholder(tf.float32, shape=(None,), name='total_reward')
         future_reward_var = tf.placeholder(tf.float32, shape=(None,), name='future_reward')
-        sample_weight_var = tf.placeholder(tf.float32, shape=(None,), name='sample_weight')
+        num_episodes_var = tf.placeholder(tf.float32, name='num_episodes')
 
         if use_advantage:
-            reward_loss_op = advantage_loss(logits_op, value_op, action_var, future_reward_var, sample_weight_var)
+            reward_loss_op = advantage_loss(logits_op, value_op, action_var, future_reward_var, num_episodes_var)
             value_loss_op = 0.5*tf.reduce_mean(tf.square(value_op - future_reward_var))
             loss_op = reward_loss_op + coeff_value*value_loss_op
         else:
-            loss_op = reward_loss(logits_op, action_var, future_reward_var, sample_weight_var)
+            loss_op = reward_loss(logits_op, action_var, future_reward_var, num_episodes_var)
 
         # Add weight decay.
         loss_op += weight_decay * tf.reduce_sum([tf.nn.l2_loss(x) for x in theta])
@@ -69,11 +69,11 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             weight = [[1.0/len(ep['state']) for t in ep['state']] for ep in episodes]
             total_rewards = [sum(ep['reward']) for ep in episodes]
             future_rewards = [compute_future_rewards(ep['reward'], discount) for ep in episodes]
-            values, grads, _ = sess.run([value_op, grad_op, train_op], feed_dict={
+            _, loss, grads, _ = sess.run([value_op, loss_op, grad_op, train_op], feed_dict={
                 state_var:         np.array(concat([ep['state'] for ep in episodes])),
                 action_var:        np.array(concat([ep['action'] for ep in episodes])),
                 future_reward_var: np.array(concat(future_rewards)),
-                sample_weight_var: np.array(concat(weight)),
+                num_episodes_var:  float(num_episodes),
             })
             h['reward'].append(np.mean(total_rewards))
             h['num_episodes'].append(total_num_episodes)
@@ -82,11 +82,11 @@ def train(env, create_policy, state_dim, action_dim, num_iters=1000, num_episode
             h['gradient'].append(grad_norms)
             h['mean_future_reward'].append(np.mean([np.mean(r) for r in future_rewards]))
             h['mean_value'].append(np.mean([np.mean(ep['value']) for ep in episodes]))
-            print '%d  reward:%10.3e' % (it, np.mean(total_rewards))
+            print '%d  reward:%10.3e loss:%10.3e' % (it, np.mean(total_rewards), loss)
 
     return h
 
-def compute_future_rewards(r, gamma):
+def compute_future_rewards(r, gamma=1.0):
     n = len(r)
     s = 0
     ss = []
@@ -123,16 +123,16 @@ def run_episode(env, policy, render=False, max_time_steps=1000):
             break
     return ep
 
-def reward_loss(logits, actions, future_rewards, weights):
+def reward_loss(logits, actions, future_rewards, n):
     actions = tf.to_int32(actions)
     # Get the log of the normalized logits for each action.
     # log(exp(logit[action]) / sum(exp(logit)))
-    log_p_action = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, actions)
-    return tf.reduce_sum(tf.mul(weights, tf.mul(future_rewards, log_p_action)))
+    neg_log_p = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, actions)
+    return 1.0/n * tf.reduce_sum(tf.mul(future_rewards, neg_log_p))
 
-def advantage_loss(logits, value, actions, future_rewards, weights):
+def advantage_loss(logits, value, actions, future_rewards, n):
     actions = tf.to_int32(actions)
     # Get the log of the normalized logits for each action.
     # log(exp(logit[action]) / sum(exp(logit)))
-    log_p_action = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, actions)
-    return tf.reduce_sum(tf.mul(weights, tf.mul(future_rewards - value, log_p_action)))
+    neg_log_p = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, actions)
+    return 1.0/n * tf.reduce_sum(tf.mul(future_rewards - value, neg_log_p))
